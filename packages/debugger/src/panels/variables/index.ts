@@ -4,6 +4,7 @@
 import { IThemeManager } from '@jupyterlab/apputils';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import {
+  PanelWithToolbar,
   tableRowsIcon,
   ToolbarButton,
   treeViewIcon
@@ -11,7 +12,6 @@ import {
 import { CommandRegistry } from '@lumino/commands';
 import { Panel, Widget } from '@lumino/widgets';
 import { IDebugger } from '../../tokens';
-import { PanelWithToolbar } from '../panelwithtoolbar';
 import { VariablesBodyGrid } from './grid';
 import { ScopeSwitcher } from './scope';
 import { VariablesBodyTree } from './tree';
@@ -19,9 +19,7 @@ import { VariablesBodyTree } from './tree';
 /**
  * A Panel to show a variable explorer.
  */
-export class Variables
-  extends PanelWithToolbar
-  implements IDebugger.IVariablesPanel {
+export class Variables extends PanelWithToolbar {
   /**
    * Instantiate a new Variables Panel.
    *
@@ -31,7 +29,8 @@ export class Variables
     super(options);
     const { model, service, commands, themeManager } = options;
     const translator = options.translator || nullTranslator;
-    this.title.label = this.trans.__('Variables');
+    const trans = translator.load('jupyterlab');
+    this.title.label = trans.__('Variables');
     this.toolbar.addClass('jp-DebuggerVariables-toolbar');
     this._tree = new VariablesBodyTree({
       model,
@@ -76,54 +75,30 @@ export class Variables
       icon: treeViewIcon,
       className: 'jp-TreeView',
       onClick: onViewChange,
-      tooltip: this.trans.__('Tree View')
+      tooltip: trans.__('Tree View')
     });
 
     const tableViewButton = new ToolbarButton({
       icon: tableRowsIcon,
       className: 'jp-TableView',
       onClick: onViewChange,
-      tooltip: this.trans.__('Table View')
+      tooltip: trans.__('Table View')
     });
 
     const markViewButtonSelection = (selectedView: string): void => {
-      const viewModeClassName = 'jp-ViewModeSelected';
-
-      if (selectedView === 'tree') {
-        tableViewButton.removeClass(viewModeClassName);
-        treeViewButton.addClass(viewModeClassName);
-      } else {
-        treeViewButton.removeClass(viewModeClassName);
-        tableViewButton.addClass(viewModeClassName);
-      }
+      tableViewButton.pressed = selectedView !== 'tree';
+      treeViewButton.pressed = !tableViewButton.pressed;
     };
 
-    markViewButtonSelection(this.viewMode);
+    markViewButtonSelection(this._table.isHidden ? 'tree' : 'table');
 
     this.toolbar.addItem('view-VariableTreeView', treeViewButton);
 
     this.toolbar.addItem('view-VariableTableView', tableViewButton);
 
-    this.addWidget(this.toolbar);
     this.addWidget(this._tree);
     this.addWidget(this._table);
     this.addClass('jp-DebuggerVariables');
-  }
-
-  /**
-   * Latest variable selected.
-   */
-  get latestSelection(): IDebugger.IVariableSelection | null {
-    return this._table.isHidden
-      ? this._tree.latestSelection
-      : this._table.latestSelection;
-  }
-
-  /**
-   * Get the variable explorer view mode
-   */
-  get viewMode(): 'tree' | 'table' {
-    return this._table.isHidden ? 'tree' : 'table';
   }
 
   /**

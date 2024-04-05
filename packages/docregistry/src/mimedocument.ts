@@ -2,6 +2,7 @@
 // Distributed under the terms of the Modified BSD License.
 
 import { Printing, showErrorMessage } from '@jupyterlab/apputils';
+import { IEditorMimeTypeService } from '@jupyterlab/codeeditor';
 import { ActivityMonitor } from '@jupyterlab/coreutils';
 import {
   IRenderMime,
@@ -283,7 +284,9 @@ export class MimeDocumentFactory extends ABCWidgetFactory<MimeDocument> {
    */
   protected createNewWidget(context: DocumentRegistry.Context): MimeDocument {
     const ft = this._fileType;
-    const mimeType = ft?.mimeTypes.length ? ft.mimeTypes[0] : 'text/plain';
+    const mimeType = ft?.mimeTypes.length
+      ? ft.mimeTypes[0]
+      : IEditorMimeTypeService.defaultMimeType;
 
     const rendermime = this._rendermime.clone({
       resolver: context.urlResolver
@@ -296,7 +299,8 @@ export class MimeDocumentFactory extends ABCWidgetFactory<MimeDocument> {
         resolver: rendermime.resolver,
         sanitizer: rendermime.sanitizer,
         linkHandler: rendermime.linkHandler,
-        latexTypesetter: rendermime.latexTypesetter
+        latexTypesetter: rendermime.latexTypesetter,
+        markdownParser: rendermime.markdownParser
       });
     } else {
       renderer = rendermime.createRenderer(mimeType);

@@ -134,8 +134,8 @@ export class SaveHandler implements IDisposable {
       })
       .catch(err => {
         // If the user canceled the save, do nothing.
-        // FIXME-TRANS: Is this affected by localization?
-        if (err.message === 'Cancel') {
+        const { name } = err;
+        if (name === 'ModalCancelError' || name === 'ModalDuplicateError') {
           return;
         }
         // Otherwise, log the error.

@@ -1,3 +1,6 @@
+.. Copyright (c) Jupyter Development Team.
+.. Distributed under the terms of the Modified BSD License.
+
 Internationalization and Localization
 =====================================
 
@@ -9,18 +12,18 @@ Four elements are used to handle the internationalization of JupyterLab:
 - `language-packs <https://github.com/jupyterlab/language-packs>`_ repository: It contains
   the source strings, their translations, the language packs and the GitHub workflows to
   update and publish the translations.
-- `Crowdin project <https://crowdin.com/project/jupyterlab>`_: Crowdin is the cloud-based solution 
+- `Crowdin project <https://crowdin.com/project/jupyterlab>`_: Crowdin is the cloud-based solution
   that streamlines localization management for JupyterLab. This is the place where contributors
   can translate JupyterLab strings.
 - `jupyterlab-translate <https://github.com/jupyterlab/jupyterlab-translate>`_ repository: Python
   library defining helpers to deal with internationalization (e.g. extracting the strings).
-- `Cookiecutter template <https://github.com/jupyterlab/language-pack-cookiecutter>`_ repository: It
+- `Package template <https://github.com/jupyterlab/language-pack-cookiecutter>`_ repository: It
   defines the Python package template of a language pack.
 
 The *language-packs* repository is the main entry point. It interacts with Crowdin to publish
 newer source strings and get the latest translation. It also creates and updates the language packs.
-And finally it publishes them. All those actions are carried out using helpers defined in 
-``jupyterlab-translate`` and the cookiecutter template.
+And finally it publishes them. All those actions are carried out using helpers defined in
+``jupyterlab-translate`` and the package template.
 
 Workflows
 ---------
@@ -99,20 +102,21 @@ This is done by manually triggering the `Prepare language packs for release <htt
 
 There is one optional setting:
 
-- The new version in form *X.Y.postZ* - if not provided, the post number will be bumped.
+- The new version in form *X.Y.postZ* or a [hatch segment](https://hatch.pypa.io/latest/version/#supported-segments) - the default is `rev` that will bump the post number.
 
 .. image:: prep_language_packs.png
+  :alt: The "Prepare language packs for release" workflow on GitHub Actions.
 
 The workflow is:
 
-1. Trigger the manual *Prepare language packs for release* workflow  
+1. Trigger the manual *Prepare language packs for release* workflow
 2. That workflow will open a new pull request with the changes to the language packs
 3. The validation workflow `Check language packs version <https://github.com/jupyterlab/language-packs/blob/master/.github/workflows/check_version.yml>`_ should pass on that pull request
 4. A maintainer needs to merge the pull request
 
 .. note::
 
-    The version policy for the language packs is to follow major and minor version numbers of 
+    The version policy for the language packs is to follow major and minor version numbers of
     JupyterLab and bumping the post number for any intermediate updates. The version
     of all language packs is identical to ease maintenance.
 
@@ -122,7 +126,7 @@ The workflow is:
 Language packs publication
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Each time a ``.bumpversion.cfg`` in any *language packs* is modified the `Create Release and publish packages <https://github.com/jupyterlab/language-packs/blob/master/.github/workflows/release_publish.yml>`_
+Each time package version is modified the `Create Release and publish packages <https://github.com/jupyterlab/language-packs/blob/master/.github/workflows/release_publish.yml>`_
 will be automatically triggered. Its steps are:
 
 1. Check that all language packs have identical versions

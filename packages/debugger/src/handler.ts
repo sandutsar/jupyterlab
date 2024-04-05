@@ -134,7 +134,6 @@ export class DebuggerHandler implements DebuggerHandler.IHandler {
       _: Session.ISessionConnection,
       status: Kernel.Status
     ): void => {
-      // FIXME-TRANS: Localizable?
       if (status.endsWith('restarting')) {
         void this.updateWidget(widget, connection);
       }
@@ -151,7 +150,6 @@ export class DebuggerHandler implements DebuggerHandler.IHandler {
       msg: KernelMessage.IIOPubMessage
     ): void => {
       if (
-        msg.parent_header != {} &&
         (msg.parent_header as KernelMessage.IHeader).msg_type ==
           'execute_request' &&
         this._service.isStarted &&
@@ -187,9 +185,8 @@ export class DebuggerHandler implements DebuggerHandler.IHandler {
       void this.update(widget, connection);
     };
 
-    const contextKernelChangedHandlers = this._contextKernelChangedHandlers[
-      widget.id
-    ];
+    const contextKernelChangedHandlers =
+      this._contextKernelChangedHandlers[widget.id];
 
     if (contextKernelChangedHandlers) {
       sessionContext.kernelChanged.disconnect(contextKernelChangedHandlers);
@@ -318,6 +315,9 @@ export class DebuggerHandler implements DebuggerHandler.IHandler {
       this._previousConnection = connection;
       await this._service.restoreState(true);
       await this._service.displayDefinedVariables();
+      if (this._service.session?.capabilities?.supportsModulesRequest) {
+        await this._service.displayModules();
+      }
     };
 
     const toggleDebugging = async (): Promise<void> => {
@@ -338,6 +338,17 @@ export class DebuggerHandler implements DebuggerHandler.IHandler {
     };
 
     addToolbarButton(false);
+
+    // listen to the disposed signals
+    widget.disposed.connect(async () => {
+      if (isDebuggerOn()) {
+        await stopDebugger();
+      }
+      removeHandlers();
+      delete this._iconButtons[widget.id];
+      delete this._contextKernelChangedHandlers[widget.id];
+    });
+
     const debuggingEnabled = await this._service.isAvailable(connection);
     if (!debuggingEnabled) {
       removeHandlers();
@@ -347,7 +358,10 @@ export class DebuggerHandler implements DebuggerHandler.IHandler {
 
     // update the active debug session
     if (!this._service.session) {
-      this._service.session = new Debugger.Session({ connection });
+      this._service.session = new Debugger.Session({
+        connection,
+        config: this._service.config
+      });
     } else {
       this._previousConnection = this._service.session!.connection?.kernel
         ? this._service.session.connection
@@ -357,6 +371,9 @@ export class DebuggerHandler implements DebuggerHandler.IHandler {
     await this._service.restoreState(false);
     if (this._service.isStarted && !this._service.hasStoppedThreads()) {
       await this._service.displayDefinedVariables();
+      if (this._service.session?.capabilities?.supportsModulesRequest) {
+        await this._service.displayModules();
+      }
     }
 
     updateIconButtonState(
@@ -376,9 +393,6 @@ export class DebuggerHandler implements DebuggerHandler.IHandler {
     // if the debugger is started but there is no handler, create a new one
     createHandler();
     this._previousConnection = connection;
-
-    // listen to the disposed signals
-    widget.disposed.connect(removeHandlers);
   }
 
   private _type: DebuggerHandler.SessionType;

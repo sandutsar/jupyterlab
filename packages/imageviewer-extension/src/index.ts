@@ -70,6 +70,7 @@ const TEXT_FILE_REGEX = new RegExp(`[.](${TEXT_FILE_TYPES.join('|')})$`);
  */
 const plugin: JupyterFrontEndPlugin<IImageTracker> = {
   activate,
+  description: 'Adds image viewer and provide its tracker.',
   id: '@jupyterlab/imageviewer-extension:plugin',
   provides: IImageTracker,
   requires: [ITranslator],
@@ -178,7 +179,7 @@ function activate(
 /**
  * Add the commands for the image widget.
  */
-export function addCommands(
+function addCommands(
   app: JupyterFrontEnd,
   tracker: IImageTracker,
   translator: ITranslator
@@ -196,53 +197,60 @@ export function addCommands(
     );
   }
 
-  commands.addCommand('imageviewer:zoom-in', {
+  commands.addCommand(CommandIDs.zoomIn, {
     execute: zoomIn,
     label: trans.__('Zoom In'),
     isEnabled
   });
 
-  commands.addCommand('imageviewer:zoom-out', {
+  commands.addCommand(CommandIDs.zoomOut, {
     execute: zoomOut,
     label: trans.__('Zoom Out'),
     isEnabled
   });
 
-  commands.addCommand('imageviewer:reset-image', {
+  commands.addCommand(CommandIDs.resetImage, {
     execute: resetImage,
     label: trans.__('Reset Image'),
     isEnabled
   });
 
-  commands.addCommand('imageviewer:rotate-clockwise', {
+  commands.addCommand(CommandIDs.rotateClockwise, {
     execute: rotateClockwise,
     label: trans.__('Rotate Clockwise'),
     isEnabled
   });
 
-  commands.addCommand('imageviewer:rotate-counterclockwise', {
+  commands.addCommand(CommandIDs.rotateCounterclockwise, {
     execute: rotateCounterclockwise,
     label: trans.__('Rotate Counterclockwise'),
     isEnabled
   });
 
-  commands.addCommand('imageviewer:flip-horizontal', {
+  commands.addCommand(CommandIDs.flipHorizontal, {
     execute: flipHorizontal,
     label: trans.__('Flip image horizontally'),
     isEnabled
   });
 
-  commands.addCommand('imageviewer:flip-vertical', {
+  commands.addCommand(CommandIDs.flipVertical, {
     execute: flipVertical,
     label: trans.__('Flip image vertically'),
     isEnabled
   });
 
-  commands.addCommand('imageviewer:invert-colors', {
+  commands.addCommand(CommandIDs.invertColors, {
     execute: invertColors,
     label: trans.__('Invert Colors'),
     isEnabled
   });
+
+  const notify = () => {
+    Object.values(CommandIDs).forEach(id => commands.notifyCommandChanged(id));
+  };
+  // All commands with isEnabled defined directly or in a semantic commands
+  tracker.currentChanged.connect(notify);
+  shell.currentChanged?.connect(notify);
 
   function zoomIn(): void {
     const widget = tracker.currentWidget?.content;

@@ -7,8 +7,6 @@ import {
   PromiseDelegate,
   UUID
 } from '@lumino/coreutils';
-import { Response } from 'node-fetch';
-import encoding from 'text-encoding';
 import WebSocket from 'ws';
 import {
   Contents,
@@ -21,23 +19,6 @@ import {
   Terminal
 } from '../src';
 import { deserialize, serialize } from '../src/kernel/serialize';
-
-// stub for node global
-declare let global: any;
-
-/**
- * This can be used by test modules that wouldn't otherwise import
- * this file.
- */
-export function init(): void {
-  if (typeof global !== 'undefined') {
-    global.TextEncoder = encoding.TextEncoder;
-    global.TextDecoder = encoding.TextDecoder;
-  }
-}
-
-// Call init.
-init();
 
 /**
  * Create a set of server settings.
@@ -119,7 +100,7 @@ export function getRequestHandler(
   // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
   body: any
 ): ServerConnection.ISettings {
-  const fetch = (info: RequestInfo, init: RequestInit) => {
+  const customFetch = (info: RequestInfo, init?: RequestInit) => {
     // Normalize the body.
     body = JSON.stringify(body);
 
@@ -127,7 +108,7 @@ export function getRequestHandler(
     const response = new Response(body, { status });
     return Promise.resolve(response as any);
   };
-  return ServerConnection.makeSettings({ fetch });
+  return ServerConnection.makeSettings({ fetch: customFetch });
 }
 
 /**
@@ -153,6 +134,10 @@ export function handleRequest(item: IService, status: number, body: any): void {
     // Normalize the body.
     if (typeof body !== 'string') {
       body = JSON.stringify(body);
+    }
+    // Body should be null for these status codes
+    if (status === 204 || status === 205) {
+      body = null;
     }
 
     // Create the response and return it as a promise.
@@ -189,7 +174,13 @@ class SocketTester implements IService {
     for (let retry = 0; retry <= 5; retry++) {
       try {
         port = getRandomInt(9000, 20000);
-        this._server = new WebSocket.Server({ port });
+        this._server = new WebSocket.Server({
+          port,
+          handleProtocols: () => {
+            return KernelMessage.supportedKernelWebSocketProtocols
+              .v1KernelWebsocketJupyterOrg;
+          }
+        });
       } catch (err) {
         if (retry === 5) {
           throw err;
@@ -473,10 +464,16 @@ export class KernelTester extends SocketTester {
   }
 
   /**
-   * Send a kernel message from the server to the client.
+   * Send a kernel message from the server to the client with newest protocol.
    */
   send(msg: KernelMessage.Message): void {
-    this.sendRaw(serialize(msg));
+    this.sendRaw(
+      serialize(
+        msg,
+        KernelMessage.supportedKernelWebSocketProtocols
+          .v1KernelWebsocketJupyterOrg
+      )
+    );
   }
 
   /**
@@ -531,6 +528,7 @@ export class KernelTester extends SocketTester {
 
   /**
    * Set up a new server websocket to pretend like it is a server kernel.
+   * Use the newest protocol.
    */
   protected onSocket(sock: WebSocket): void {
     super.onSocket(sock);
@@ -539,7 +537,11 @@ export class KernelTester extends SocketTester {
       if (msg instanceof Buffer) {
         msg = new Uint8Array(msg).buffer;
       }
-      const data = deserialize(msg);
+      const data = deserialize(
+        msg,
+        KernelMessage.supportedKernelWebSocketProtocols
+          .v1KernelWebsocketJupyterOrg
+      );
       if (data.header.msg_type === 'kernel_info_request') {
         // First send status busy message.
         this.parentHeader = data.header;
@@ -648,10 +650,16 @@ export class SessionTester extends SocketTester {
   }
 
   /**
-   * Send a kernel message from the server to the client.
+   * Send a kernel message from the server to the client with newest protocol.
    */
   send(msg: KernelMessage.IMessage): void {
-    this.sendRaw(serialize(msg));
+    this.sendRaw(
+      serialize(
+        msg,
+        KernelMessage.supportedKernelWebSocketProtocols
+          .v1KernelWebsocketJupyterOrg
+      )
+    );
   }
 
   /**
@@ -663,6 +671,7 @@ export class SessionTester extends SocketTester {
 
   /**
    * Set up a new server websocket to pretend like it is a server kernel.
+   * Use the newest protocol.
    */
   protected onSocket(sock: WebSocket): void {
     super.onSocket(sock);
@@ -670,7 +679,11 @@ export class SessionTester extends SocketTester {
       if (msg instanceof Buffer) {
         msg = new Uint8Array(msg).buffer;
       }
-      const data = deserialize(msg);
+      const data = deserialize(
+        msg,
+        KernelMessage.supportedKernelWebSocketProtocols
+          .v1KernelWebsocketJupyterOrg
+      );
       if (KernelMessage.isInfoRequestMsg(data)) {
         // First send status busy message.
         this.sendStatus('busy', data.header);
@@ -741,5 +754,6 @@ export class TerminalTester extends SocketTester {
  * type B = MakeOptional<A, 'a'>
  * const x: B = {b: 'test'}
  */
-type MakeOptional<T, K> = Pick<T, Exclude<keyof T, K>> &
-  { [P in Extract<keyof T, K>]?: T[P] };
+type MakeOptional<T, K> = Pick<T, Exclude<keyof T, K>> & {
+  [P in Extract<keyof T, K>]?: T[P];
+};

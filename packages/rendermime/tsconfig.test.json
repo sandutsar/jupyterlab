@@ -6,9 +6,6 @@
       "path": "../apputils"
     },
     {
-      "path": "../codemirror"
-    },
-    {
       "path": "../coreutils"
     },
     {
@@ -30,10 +27,7 @@
       "path": "."
     },
     {
-      "path": "../mathjax2"
-    },
-    {
-      "path": "../../testutils"
+      "path": "../testing"
     }
   ]
 }

@@ -1,10 +1,10 @@
 // Copyright (c) Jupyter Development Team.
 // Distributed under the terms of the Modified BSD License.
 
-import { IJupyterLabPageFixture, test } from '@jupyterlab/galata';
-import { expect } from '@playwright/test';
+import { expect, IJupyterLabPageFixture, test } from '@jupyterlab/galata';
 
 const fileName = 'notebook.ipynb';
+const TRUSTED_SELECTOR = 'svg[data-icon="ui-components:trusted"]';
 
 const menuPaths = ['File', 'Edit', 'View', 'Run', 'Kernel', 'Help'];
 
@@ -26,6 +26,7 @@ test.describe('Notebook Create', () => {
     await page.notebook.setCell(0, 'raw', 'Just a raw cell');
     expect(await page.notebook.getCellCount()).toBe(1);
     expect(await page.notebook.getCellType(0)).toBe('raw');
+    await expect(page.locator(TRUSTED_SELECTOR)).toHaveCount(1);
   });
 
   test('Create a Markdown cell', async ({ page }) => {
@@ -36,12 +37,14 @@ test.describe('Notebook Create', () => {
     await page.notebook.runCell(1, true);
     expect(await page.notebook.getCellCount()).toBe(2);
     expect(await page.notebook.getCellType(1)).toBe('markdown');
+    await expect(page.locator(TRUSTED_SELECTOR)).toHaveCount(1);
   });
 
   test('Create a Code cell', async ({ page }) => {
     await page.notebook.addCell('code', '2 ** 3');
     expect(await page.notebook.getCellCount()).toBe(2);
     expect(await page.notebook.getCellType(1)).toBe('code');
+    await expect(page.locator(TRUSTED_SELECTOR)).toHaveCount(1);
   });
 
   test('Save Notebook', async ({ page }) => {
@@ -53,16 +56,16 @@ test.describe('Notebook Create', () => {
   menuPaths.forEach(menuPath => {
     test(`Open menu item ${menuPath}`, async ({ page, sessions }) => {
       // Wait for kernel to be idle as some menu depend of kernel information
-      expect(
-        await page.waitForSelector(`#jp-main-statusbar >> text=Idle`)
-      ).toBeTruthy();
+      await expect(
+        page.locator(`#jp-main-statusbar >> text=Idle`).first()
+      ).toHaveCount(1);
 
-      await page.menu.open(menuPath);
+      await page.menu.openLocator(menuPath);
       expect(await page.menu.isOpen(menuPath)).toBeTruthy();
 
       const imageName = `opened-menu-${menuPath.replace(/>/g, '-')}.png`;
-      const menu = await page.menu.getOpenMenu();
-      expect(await menu.screenshot()).toMatchSnapshot(imageName.toLowerCase());
+      const menu = await page.menu.getOpenMenuLocator();
+      expect(await menu!.screenshot()).toMatchSnapshot(imageName.toLowerCase());
     });
   });
 
@@ -73,19 +76,20 @@ test.describe('Notebook Create', () => {
     const imageName = 'run-cells.png';
 
     expect((await page.notebook.getCellTextOutput(2))[0]).toBe('8');
+    await expect(page.locator(TRUSTED_SELECTOR)).toHaveCount(1);
 
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Toggle Dark theme', async ({ page }) => {
     await populateNotebook(page);
     await page.notebook.run();
     await page.theme.setDarkTheme();
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
     const imageName = 'dark-theme.png';
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 });

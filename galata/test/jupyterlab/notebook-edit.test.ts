@@ -1,8 +1,7 @@
 // Copyright (c) Jupyter Development Team.
 // Distributed under the terms of the Modified BSD License.
 
-import { IJupyterLabPageFixture, test } from '@jupyterlab/galata';
-import { expect } from '@playwright/test';
+import { expect, IJupyterLabPageFixture, test } from '@jupyterlab/galata';
 
 const fileName = 'notebook.ipynb';
 
@@ -24,9 +23,9 @@ test.describe('Notebook Edit', () => {
     await page.notebook.addCell('code', '2 ** 3');
     await page.notebook.runCell(1, true);
     const imageName = 'run-cell.png';
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Re-edit after execution', async ({ page }) => {
@@ -35,9 +34,9 @@ test.describe('Notebook Edit', () => {
     await page.notebook.setCell(1, 'code', '2 ** 6');
 
     const imageName = 'reedit-cell.png';
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Execute again', async ({ page }) => {
@@ -46,9 +45,9 @@ test.describe('Notebook Edit', () => {
     await page.notebook.setCell(1, 'code', '2 ** 6');
 
     const imageName = 'execute-again.png';
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Copy-Paste cell', async ({ page }) => {
@@ -56,12 +55,12 @@ test.describe('Notebook Edit', () => {
 
     let imageName = 'copy-paste-cell.png';
     await page.notebook.selectCells(1);
-    await page.menu.clickMenuItem('Edit>Copy Cells');
+    await page.menu.clickMenuItem('Edit>Copy Cell');
     await page.notebook.selectCells(0);
-    await page.menu.clickMenuItem('Edit>Paste Cells Above');
-    let nbPanel = await page.notebook.getNotebookInPanel();
+    await page.menu.clickMenuItem('Edit>Paste Cell Above');
+    let nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Cut-Paste cell', async ({ page }) => {
@@ -69,12 +68,12 @@ test.describe('Notebook Edit', () => {
 
     const imageName = 'cut-paste-cell.png';
     await page.notebook.selectCells(0);
-    await page.menu.clickMenuItem('Edit>Cut Cells');
-    await page.notebook.selectCells(2);
-    await page.menu.clickMenuItem('Edit>Paste Cells Below');
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    await page.menu.clickMenuItem('Edit>Cut Cell');
+    await page.notebook.selectCells(0);
+    await page.menu.clickMenuItem('Edit>Paste Cell Below');
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Paste-Replace cell', async ({ page }) => {
@@ -82,12 +81,12 @@ test.describe('Notebook Edit', () => {
 
     const imageName = 'paste-replace-cell.png';
     await page.notebook.selectCells(0);
-    await page.menu.clickMenuItem('Edit>Copy Cells');
+    await page.menu.clickMenuItem('Edit>Copy Cell');
     await page.notebook.selectCells(2);
-    await page.menu.clickMenuItem('Edit>Paste Cells and Replace');
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    await page.menu.clickMenuItem('Edit>Paste Cell and Replace');
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Delete cell', async ({ page }) => {
@@ -95,10 +94,10 @@ test.describe('Notebook Edit', () => {
 
     const imageName = 'delete-cell.png';
     await page.notebook.selectCells(2);
-    await page.menu.clickMenuItem('Edit>Delete Cells');
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    await page.menu.clickMenuItem('Edit>Delete Cell');
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Select all cells', async ({ page }) => {
@@ -106,9 +105,9 @@ test.describe('Notebook Edit', () => {
     const imageName = 'select-all-cells.png';
     await page.notebook.selectCells(2);
     await page.menu.clickMenuItem('Edit>Select All Cells');
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Deselect all cells', async ({ page }) => {
@@ -116,29 +115,29 @@ test.describe('Notebook Edit', () => {
     const imageName = 'deselect-all-cells.png';
     await page.notebook.selectCells(1, 2);
     await page.menu.clickMenuItem('Edit>Deselect All Cells');
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Move cells up', async ({ page }) => {
     await populateNotebook(page);
     const imageName = 'move-cell-up.png';
     await page.notebook.selectCells(1);
-    await page.menu.clickMenuItem('Edit>Move Cells Up');
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    await page.menu.clickMenuItem('Edit>Move Cell Up');
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Move cells down', async ({ page }) => {
     await populateNotebook(page);
     const imageName = 'move-cell-down.png';
     await page.notebook.selectCells(0);
-    await page.menu.clickMenuItem('Edit>Move Cells Down');
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    await page.menu.clickMenuItem('Edit>Move Cell Down');
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Split cell', async ({ page }) => {
@@ -150,9 +149,10 @@ test.describe('Notebook Edit', () => {
     await page.keyboard.insertText('3 ** 2');
     await page.keyboard.press('Home');
     await page.menu.clickMenuItem('Edit>Split Cell');
-    const nbPanel = await page.notebook.getNotebookInPanel();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
+
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 
   test('Merge split cells', async ({ page }) => {
@@ -162,8 +162,8 @@ test.describe('Notebook Edit', () => {
     const imageName = 'merge-cells.png';
     await page.notebook.selectCells(1, 2);
     await page.menu.clickMenuItem('Edit>Merge Selected Cells');
-    const nbPanel = await page.notebook.getNotebookInPanel();
+    const nbPanel = await page.notebook.getNotebookInPanelLocator();
 
-    expect(await nbPanel.screenshot()).toMatchSnapshot(imageName);
+    expect(await nbPanel!.screenshot()).toMatchSnapshot(imageName);
   });
 });

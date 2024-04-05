@@ -4,9 +4,19 @@
   "jupyter.lab.menus": {
     "context": [
       {
-        "command": "terminal:refresh",
+        "command": "terminal:copy",
         "selector": ".jp-Terminal",
         "rank": 1
+      },
+      {
+        "command": "terminal:paste",
+        "selector": ".jp-Terminal",
+        "rank": 2
+      },
+      {
+        "command": "terminal:refresh",
+        "selector": ".jp-Terminal",
+        "rank": 3
       }
     ]
   },
@@ -81,6 +91,12 @@
       "type": "boolean",
       "default": false
     },
+    "closeOnExit": {
+      "title": "Close on exit",
+      "description": "Close the widget when exiting the terminal.",
+      "type": "boolean",
+      "default": true
+    },
     "pasteWithCtrlV": {
       "title": "Paste with Ctrl+V",
       "description": "Enable pasting with Ctrl+V.  This can be disabled to use Ctrl+V in the vi editor, for instance.  This setting has no effect on macOS, where Cmd+V is available",
@@ -92,6 +108,12 @@
       "description": "Option key on macOS can be used as meta key. This enables to use shortcuts such as option + f to move cursor forward one word",
       "type": "boolean",
       "default": false
+    },
+    "cursorBlink": {
+      "title": "Blinking cursor",
+      "description": "Whether to blink the cursor. Changes require reopening the terminal.",
+      "type": "boolean",
+      "default": true
     }
   },
   "additionalProperties": false,

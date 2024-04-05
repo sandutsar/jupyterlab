@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) Jupyter Development Team.
+ * Distributed under the terms of the Modified BSD License.
+ */
+
 import {
   CommandToolbarButton,
   LabIcon,
@@ -6,6 +11,7 @@ import {
 import { CommandRegistry } from '@lumino/commands';
 import { Widget } from '@lumino/widgets';
 import { IToolbarWidgetRegistry, ToolbarRegistry } from '../tokens';
+import { ISignal, Signal } from '@lumino/signaling';
 
 /**
  * Concrete implementation of IToolbarWidgetRegistry interface
@@ -36,6 +42,13 @@ export class ToolbarWidgetRegistry implements IToolbarWidgetRegistry {
   }
 
   /**
+   * A signal emitted when a factory widget has been added.
+   */
+  get factoryAdded(): ISignal<this, string> {
+    return this._factoryAdded;
+  }
+
+  /**
    * Create a toolbar item widget
    *
    * @param widgetFactory The widget factory name that creates the toolbar
@@ -55,14 +68,14 @@ export class ToolbarWidgetRegistry implements IToolbarWidgetRegistry {
   }
 
   /**
-   * Register a new toolbar item factory
+   * Add a new toolbar item factory
    *
    * @param widgetFactory The widget factory name that creates the toolbar
    * @param toolbarItemName The unique toolbar item
    * @param factory The factory function that receives the widget containing the toolbar and returns the toolbar widget.
    * @returns The previously defined factory
    */
-  registerFactory<T extends Widget = Widget>(
+  addFactory<T extends Widget = Widget>(
     widgetFactory: string,
     toolbarItemName: string,
     factory: (main: T) => Widget
@@ -74,7 +87,26 @@ export class ToolbarWidgetRegistry implements IToolbarWidgetRegistry {
       this._widgets.set(widgetFactory, namespace);
     }
     namespace.set(toolbarItemName, factory);
+    this._factoryAdded.emit(toolbarItemName);
     return oldFactory;
+  }
+
+  /**
+   * Register a new toolbar item factory
+   *
+   * @param widgetFactory The widget factory name that creates the toolbar
+   * @param toolbarItemName The unique toolbar item
+   * @param factory The factory function that receives the widget containing the toolbar and returns the toolbar widget.
+   * @returns The previously defined factory
+   *
+   * @deprecated since v4 use `addFactory` instead
+   */
+  registerFactory<T extends Widget = Widget>(
+    widgetFactory: string,
+    toolbarItemName: string,
+    factory: (main: T) => Widget
+  ): ((main: T) => Widget) | undefined {
+    return this.addFactory(widgetFactory, toolbarItemName, factory);
   }
 
   protected _defaultFactory: (
@@ -82,10 +114,9 @@ export class ToolbarWidgetRegistry implements IToolbarWidgetRegistry {
     widget: Widget,
     toolbarItem: ToolbarRegistry.IWidget
   ) => Widget;
-  protected _widgets: Map<
-    string,
-    Map<string, (main: Widget) => Widget>
-  > = new Map<string, Map<string, (main: Widget) => Widget>>();
+  protected _widgets: Map<string, Map<string, (main: Widget) => Widget>> =
+    new Map<string, Map<string, (main: Widget) => Widget>>();
+  protected _factoryAdded = new Signal<this, string>(this);
 }
 
 /**
@@ -112,6 +143,7 @@ export function createDefaultFactory(
           command: tId,
           args: tArgs,
           label: tLabel,
+          caption: tCaption,
           icon: tIcon
         } = toolbarItem;
         const id = tId ?? '';
@@ -125,7 +157,8 @@ export function createDefaultFactory(
           id,
           args,
           icon,
-          label
+          label,
+          caption: tCaption as string
         });
       }
       case 'spacer':

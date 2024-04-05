@@ -1,11 +1,12 @@
-// Copyright (c) Jupyter Development Team.
-// Copyright (c) Bloomberg Finance LP.
-// Distributed under the terms of the Modified BSD License.
+/*
+ * Copyright (c) Jupyter Development Team.
+ * Distributed under the terms of the Modified BSD License.
+ * Copyright (c) Bloomberg Finance LP.
+ */
 
 import * as path from 'path';
 
-import { test } from '@jupyterlab/galata';
-import { expect } from '@playwright/test';
+import { expect, test } from '@jupyterlab/galata';
 
 test.describe('Contents API Tests', () => {
   test('Upload directory to server', async ({ page, tmpPath }) => {
@@ -17,11 +18,9 @@ test.describe('Contents API Tests', () => {
     // Upload removed existing tmpPath, so we need to get inside
     await page.dblclick(`text=${tmpPath}`);
 
-    expect(await page.waitForSelector('text=sub_folder')).toBeTruthy();
-    expect(await page.waitForSelector('text=upload_image.png')).toBeTruthy();
-    expect(
-      await page.waitForSelector('text=upload_notebook.ipynb')
-    ).toBeTruthy();
+    await expect(page.locator('text=sub_folder')).toHaveCount(1);
+    await expect(page.locator('text=upload_image.png')).toHaveCount(1);
+    await expect(page.locator('text=upload_notebook.ipynb')).toHaveCount(1);
   });
 
   test('File operations', async ({ page, tmpPath }) => {

@@ -1,8 +1,7 @@
 // Copyright (c) Jupyter Development Team.
 // Distributed under the terms of the Modified BSD License.
 
-import { expect } from '@playwright/test';
-import { JupyterLabPage, test } from '@jupyterlab/galata';
+import { expect, galata, JupyterLabPage, test } from '@jupyterlab/galata';
 
 test.describe('page', () => {
   test('should return a JupyterLabPage', ({ page }) => {
@@ -17,7 +16,7 @@ test.describe('page', () => {
 
   test('should have playwright Page interface', async ({ page }) => {
     expect(page.waitForSelector).toBe(
-      ((page as any) as JupyterLabPage).page.waitForSelector
+      (page as unknown as JupyterLabPage).page.waitForSelector
     );
   });
 });
@@ -25,6 +24,7 @@ test.describe('page', () => {
 test.describe('mockSettings', () => {
   test.use({
     mockSettings: {
+      ...galata.DEFAULT_SETTINGS,
       '@jupyterlab/apputils-extension:themes': {
         theme: 'JupyterLab Dark'
       }
@@ -37,7 +37,7 @@ test.describe('mockSettings', () => {
 
   test('should not return mocked settings after save', async ({ page }) => {
     await page.click('text=Settings');
-    await page.click('ul[role="menu"] >> text=Theme');
+    await page.click('.lm-Menu ul[role="menu"] >> text=Theme');
     const [response] = await Promise.all([
       page.waitForResponse(
         response =>
@@ -45,11 +45,11 @@ test.describe('mockSettings', () => {
             response.url()
           ) && response.request().method() === 'GET'
       ),
-      page.click('ul[role="menu"] >> text=JupyterLab Light')
+      page.click('.lm-Menu ul[role="menu"] >> text=JupyterLab Light')
     ]);
 
-    await page.waitForSelector('#jupyterlab-splash', { state: 'detached' });
-    await page.waitForSelector('div[role="main"] >> text=Launcher');
+    await page.locator('#jupyterlab-splash').waitFor({ state: 'detached' });
+    await page.locator('div[role="main"] >> text=Launcher').waitFor();
 
     expect(((await response.json()) as any).raw).toMatch(/JupyterLab Light/);
 
@@ -98,7 +98,7 @@ test.describe('mockState', () => {
 
   test('should return the mocked state', async ({ page }) => {
     expect(
-      await page.waitForSelector(
+      await page.locator(
         '[aria-label="Running Sessions section"] >> text=Open Tabs'
       )
     ).toBeTruthy();
@@ -120,9 +120,9 @@ test.describe('sessions', () => {
     expect(sessions.size).toEqual(1);
 
     await page.menu.clickMenuItem('File>New>Console');
-    await page.waitForSelector('.jp-Dialog');
+    await page.locator('.jp-Dialog').waitFor();
     await page.click('.jp-Dialog .jp-mod-accept');
-    await page.waitForSelector('text= | Idle');
+    await page.locator('text= | Idle').waitFor();
 
     expect(sessions.size).toEqual(2);
   });

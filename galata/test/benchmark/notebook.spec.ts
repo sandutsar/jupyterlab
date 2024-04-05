@@ -21,8 +21,8 @@ const parameters = [].concat(
 
 test.describe('Benchmark', () => {
   // Generate the files for the benchmark
-  test.beforeAll(async ({ baseURL }) => {
-    const content = galata.newContentsHelper(baseURL);
+  test.beforeAll(async ({ request }) => {
+    const content = galata.newContentsHelper(request);
     const codeContent = galata.Notebook.generateNotebook(300, 'code', [
       'for x in range(OUTPUT_LENGTH):\n',
       '    print(f"{PREFIX} {x}")'
@@ -74,9 +74,13 @@ test.describe('Benchmark', () => {
     await content.uploadContent(loremIpsum, 'text', `${tmpPath}/${textFile}`);
   });
 
+  test.beforeEach(async ({ page }) => {
+    await galata.Mock.mockSettings(page, [], galata.DEFAULT_SETTINGS);
+  });
+
   // Remove benchmark files
-  test.afterAll(async ({ baseURL }) => {
-    const content = galata.newContentsHelper(baseURL);
+  test.afterAll(async ({ request }) => {
+    const content = galata.newContentsHelper(request);
     await content.deleteDirectory(tmpPath);
   });
 
@@ -98,7 +102,7 @@ test.describe('Benchmark', () => {
         file: path.basename(file, '.ipynb'),
         project: testInfo.project.name
       };
-      const perf = new galata.newPerformanceHelper(page);
+      const perf = galata.newPerformanceHelper(page);
 
       await page.goto(baseURL + '?reset');
 
@@ -108,20 +112,30 @@ test.describe('Benchmark', () => {
       const openTime = await perf.measure(async () => {
         // Open the notebook and wait for the spinner
         await Promise.all([
-          page.waitForSelector('[role="main"] >> .jp-SpinnerContent'),
+          page.locator('[role="main"] >> .jp-SpinnerContent').waitFor(),
           page.dblclick(`#filebrowser >> text=${file}`)
         ]);
 
         // Wait for spinner to be hidden
-        await page.waitForSelector('[role="main"] >> .jp-SpinnerContent', {
-          state: 'hidden'
-        });
+        await page
+          .locator('[role="main"] >> .jp-SpinnerContent')
+          .waitFor({ state: 'hidden' });
       });
 
       // Check the notebook is correctly opened
-      let panel = await page.$('[role="main"] >> .jp-NotebookPanel');
+      let panel = page.locator('[role="main"] >> .jp-NotebookPanel');
       // Get only the document node to avoid noise from kernel and debugger in the toolbar
-      let document = await panel.$('.jp-Notebook');
+      let document = panel.locator('.jp-Notebook');
+
+      // Wait for the cell toolbar to be visible in code cell.
+      if (file === codeNotebook) {
+        await expect(
+          page.locator(
+            '.jp-Notebook .jp-Cell .jp-cell-toolbar:not(.jp-Toolbar-micro)'
+          )
+        ).toBeVisible();
+      }
+
       expect(await document.screenshot()).toMatchSnapshot(
         `${file.replace('.', '-')}.png`
       );
@@ -136,17 +150,21 @@ test.describe('Benchmark', () => {
 
       // Shutdown the kernel to be sure it does not get in our way (especially for the close action)
       await page.click('li[role="menuitem"]:has-text("Kernel")');
-      await page.click('ul[role="menu"] >> text=Shut Down All Kernels…');
-      await page.click(':nth-match(button:has-text("Shut Down All"), 3)');
+      await page.click(
+        '.lm-Menu ul[role="menu"] >> text=Shut Down All Kernels…'
+      );
+      await page.click('button:has-text("Shut Down All") >> nth=-1'); // Click on the last matched button.
 
       // Open text file
       const fromTime = await perf.measure(async () => {
         await page.dblclick(`#filebrowser >> text=${textFile}`);
-        await page.waitForSelector(
-          `div[role="main"] >> .lm-DockPanel-tabBar >> text=${path.basename(
-            textFile
-          )}`
-        );
+        await page
+          .locator(
+            `div[role="main"] >> .lm-DockPanel-tabBar >> text=${path.basename(
+              textFile
+            )}`
+          )
+          .waitFor();
       });
 
       let editorPanel = page.locator(
@@ -170,9 +188,6 @@ test.describe('Benchmark', () => {
       });
 
       // Check the notebook is correctly opened
-      panel = await page.$('[role="main"] >> .jp-NotebookPanel');
-      // Get only the document node to avoid noise from kernel and debugger in the toolbar
-      document = await panel.$('.jp-Notebook');
       expect(await document.screenshot()).toMatchSnapshot(
         `${file.replace('.', '-')}.png`
       );
@@ -188,7 +203,7 @@ test.describe('Benchmark', () => {
       // Close notebook
       await page.click('li[role="menuitem"]:has-text("File")');
       const closeTime = await perf.measure(async () => {
-        await page.click('ul[role="menu"] >> text=Close Tab');
+        await page.click('.lm-Menu ul[role="menu"] >> text=Close Tab');
         // Revert changes so we don't measure saving
         const dimissButton = page.locator('button:has-text("Discard")');
         if (await dimissButton.isVisible({ timeout: 50 })) {

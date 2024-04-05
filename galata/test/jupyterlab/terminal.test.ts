@@ -1,5 +1,9 @@
-import { test } from '@jupyterlab/galata';
-import { expect } from '@playwright/test';
+/*
+ * Copyright (c) Jupyter Development Team.
+ * Distributed under the terms of the Modified BSD License.
+ */
+
+import { expect, test } from '@jupyterlab/galata';
 
 const TERMINAL_SELECTOR = '.jp-Terminal';
 const TERMINAL_THEME_ATTRIBUTE = 'data-term-theme';
@@ -7,7 +11,7 @@ const TERMINAL_THEME_ATTRIBUTE = 'data-term-theme';
 test.describe('Terminal', () => {
   test.beforeEach(async ({ page }) => {
     await page.menu.clickMenuItem('File>New>Terminal');
-    await page.waitForSelector(TERMINAL_SELECTOR);
+    await page.locator(TERMINAL_SELECTOR).waitFor();
   });
 
   test.describe('Open', () => {
@@ -83,4 +87,43 @@ test.describe('Terminal', () => {
       expect(await terminal.screenshot()).toMatchSnapshot('dark-term-dark.png');
     });
   });
+});
+
+test('Terminal should open in Launcher cwd', async ({ page, tmpPath }) => {
+  await page.locator(`.jp-Launcher-cwd > h3:has-text("${tmpPath}")`).waitFor();
+
+  await page.locator('[role="main"] >> p:has-text("Terminal")').click();
+
+  const terminal = page.locator(TERMINAL_SELECTOR);
+  await terminal.waitFor();
+
+  await page.waitForTimeout(1000);
+  await page.keyboard.type('basename $PWD');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(1000);
+  expect(await terminal.screenshot()).toMatchSnapshot('launcher-term.png');
+});
+
+test('Terminal web link', async ({ page, tmpPath }) => {
+  await page.locator(`.jp-Launcher-cwd > h3:has-text("${tmpPath}")`).waitFor();
+
+  await page.locator('[role="main"] >> p:has-text("Terminal")').click();
+
+  const terminal = page.locator(TERMINAL_SELECTOR);
+  await terminal.waitFor();
+
+  await page.waitForTimeout(1000);
+  await page.keyboard.type('echo https://jupyter.org/');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(1000);
+  await Promise.all([
+    terminal.locator('.jp-Terminal-body .xterm-cursor-pointer').waitFor(),
+    terminal.locator('canvas.xterm-cursor-layer').hover({
+      position: {
+        x: 60,
+        y: 23
+      }
+    })
+  ]);
+  expect(await terminal.screenshot()).toMatchSnapshot('web-links-term.png');
 });

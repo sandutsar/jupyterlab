@@ -2,27 +2,15 @@
 // Distributed under the terms of the Modified BSD License.
 
 import { showErrorMessage } from '@jupyterlab/apputils';
+import { PathExt } from '@jupyterlab/coreutils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { Contents, ServerConnection } from '@jupyterlab/services';
-import {
-  ITranslator,
-  nullTranslator,
-  TranslationBundle
-} from '@jupyterlab/translation';
-import {
-  newFolderIcon,
-  ReactWidget,
-  refreshIcon,
-  Toolbar,
-  ToolbarButton
-} from '@jupyterlab/ui-components';
-import { IIterator } from '@lumino/algorithm';
-import { PanelLayout, Widget } from '@lumino/widgets';
+import { ITranslator, nullTranslator } from '@jupyterlab/translation';
+import { SidePanel } from '@jupyterlab/ui-components';
+import { Panel } from '@lumino/widgets';
 import { BreadCrumbs } from './crumbs';
 import { DirListing } from './listing';
 import { FilterFileBrowserModel } from './model';
-import { FilenameSearcher } from './search';
-import { Uploader } from './upload';
 
 /**
  * The class name added to file browsers.
@@ -30,14 +18,14 @@ import { Uploader } from './upload';
 const FILE_BROWSER_CLASS = 'jp-FileBrowser';
 
 /**
+ * The class name added to file browser panel (gather filter, breadcrumbs and listing).
+ */
+const FILE_BROWSER_PANEL_CLASS = 'jp-FileBrowser-Panel';
+
+/**
  * The class name added to the filebrowser crumbs node.
  */
 const CRUMBS_CLASS = 'jp-FileBrowser-crumbs';
-
-/**
- * The class name added to the filebrowser filterbox node.
- */
-const FILTERBOX_CLASS = 'jp-FileBrowser-filterBox';
 
 /**
  * The class name added to the filebrowser toolbar node.
@@ -56,78 +44,49 @@ const LISTING_CLASS = 'jp-FileBrowser-listing';
  * and presents itself as a flat list of files and directories with
  * breadcrumbs.
  */
-export class FileBrowser extends Widget {
+export class FileBrowser extends SidePanel {
   /**
    * Construct a new file browser.
    *
    * @param options - The file browser options.
    */
   constructor(options: FileBrowser.IOptions) {
-    super();
+    super({ content: new Panel(), translator: options.translator });
     this.addClass(FILE_BROWSER_CLASS);
+    this.toolbar.addClass(TOOLBAR_CLASS);
     this.id = options.id;
+    const translator = (this.translator = options.translator ?? nullTranslator);
 
     const model = (this.model = options.model);
     const renderer = options.renderer;
-    const translator = this.translator;
 
     model.connectionFailure.connect(this._onConnectionFailure, this);
-    this.translator = options.translator || nullTranslator;
     this._manager = model.manager;
-    this._trans = this.translator.load('jupyterlab');
-    this.crumbs = new BreadCrumbs({ model, translator });
-    this.toolbar = new Toolbar<Widget>();
-    // a11y
-    this.toolbar.node.setAttribute('role', 'navigation');
+
     this.toolbar.node.setAttribute(
       'aria-label',
       this._trans.__('file browser')
     );
-    this._directoryPending = false;
 
-    const newFolder = new ToolbarButton({
-      icon: newFolderIcon,
-      onClick: () => {
-        this.createNewDirectory();
-      },
-      tooltip: this._trans.__('New Folder')
-    });
-    const uploader = new Uploader({ model, translator: this.translator });
+    // File browser widgets container
+    this.mainPanel = new Panel();
+    this.mainPanel.addClass(FILE_BROWSER_PANEL_CLASS);
+    this.mainPanel.title.label = this._trans.__('File Browser');
 
-    const refresher = new ToolbarButton({
-      icon: refreshIcon,
-      onClick: () => {
-        void model.refresh();
-      },
-      tooltip: this._trans.__('Refresh File List')
-    });
-
-    this.toolbar.addItem('newFolder', newFolder);
-    this.toolbar.addItem('upload', uploader);
-    this.toolbar.addItem('refresher', refresher);
+    this.crumbs = new BreadCrumbs({ model, translator });
+    this.crumbs.addClass(CRUMBS_CLASS);
 
     this.listing = this.createDirListing({
       model,
       renderer,
-      translator: this.translator
+      translator
     });
-
-    this._filenameSearcher = FilenameSearcher({
-      listing: this.listing,
-      useFuzzyFilter: this._useFuzzyFilter,
-      placeholder: this._trans.__('Filter files by name')
-    });
-
-    this.crumbs.addClass(CRUMBS_CLASS);
-    this.toolbar.addClass(TOOLBAR_CLASS);
-    this._filenameSearcher.addClass(FILTERBOX_CLASS);
     this.listing.addClass(LISTING_CLASS);
 
-    this.layout = new PanelLayout();
-    this.layout.addWidget(this.toolbar);
-    this.layout.addWidget(this._filenameSearcher);
-    this.layout.addWidget(this.crumbs);
-    this.layout.addWidget(this.listing);
+    this.mainPanel.addWidget(this.crumbs);
+    this.mainPanel.addWidget(this.listing);
+
+    this.addWidget(this.mainPanel);
 
     if (options.restore !== false) {
       void model.restore(this.id);
@@ -138,16 +97,6 @@ export class FileBrowser extends Widget {
    * The model used by the file browser.
    */
   readonly model: FilterFileBrowserModel;
-
-  /**
-   * The toolbar used by the file browser.
-   */
-  readonly toolbar: Toolbar<Widget>;
-
-  /**
-   * Override Widget.layout with a more specific PanelLayout type.
-   */
-  layout: PanelLayout;
 
   /**
    * Whether to show active file in file browser
@@ -177,26 +126,30 @@ export class FileBrowser extends Widget {
   }
 
   /**
-   * Whether to use fuzzy filtering on file names.
+   * Whether to show the full path in the breadcrumbs
    */
-  set useFuzzyFilter(value: boolean) {
-    this._useFuzzyFilter = value;
+  get showFullPath(): boolean {
+    return this.crumbs.fullPath;
+  }
 
-    this._filenameSearcher = FilenameSearcher({
-      listing: this.listing,
-      useFuzzyFilter: this._useFuzzyFilter,
-      placeholder: this._trans.__('Filter files by name'),
-      forceRefresh: true
-    });
-    this._filenameSearcher.addClass(FILTERBOX_CLASS);
+  set showFullPath(value: boolean) {
+    this.crumbs.fullPath = value;
+  }
 
-    this.layout.removeWidget(this._filenameSearcher);
-    this.layout.removeWidget(this.crumbs);
-    this.layout.removeWidget(this.listing);
+  /**
+   * Whether to show the file size column
+   */
+  get showFileSizeColumn(): boolean {
+    return this._showFileSizeColumn;
+  }
 
-    this.layout.addWidget(this._filenameSearcher);
-    this.layout.addWidget(this.crumbs);
-    this.layout.addWidget(this.listing);
+  set showFileSizeColumn(value: boolean) {
+    if (this.listing.setColumnVisibility) {
+      this.listing.setColumnVisibility('file_size', value);
+      this._showFileSizeColumn = value;
+    } else {
+      console.warn('Listing does not support toggling column visibility');
+    }
   }
 
   /**
@@ -212,11 +165,43 @@ export class FileBrowser extends Widget {
   }
 
   /**
+   * Whether to show checkboxes next to files and folders
+   */
+  get showFileCheckboxes(): boolean {
+    return this._showFileCheckboxes;
+  }
+
+  set showFileCheckboxes(value: boolean) {
+    if (this.listing.setColumnVisibility) {
+      this.listing.setColumnVisibility('is_selected', value);
+      this._showFileCheckboxes = value;
+    } else {
+      console.warn('Listing does not support toggling column visibility');
+    }
+  }
+
+  /**
+   * Whether to sort notebooks above other files
+   */
+  get sortNotebooksFirst(): boolean {
+    return this._sortNotebooksFirst;
+  }
+
+  set sortNotebooksFirst(value: boolean) {
+    if (this.listing.setNotebooksFirstSorting) {
+      this.listing.setNotebooksFirstSorting(value);
+      this._sortNotebooksFirst = value;
+    } else {
+      console.warn('Listing does not support sorting notebooks first');
+    }
+  }
+
+  /**
    * Create an iterator over the listing's selected items.
    *
    * @returns A new iterator over the listing's selected items.
    */
-  selectedItems(): IIterator<Contents.IModel> {
+  selectedItems(): IterableIterator<Contents.IModel> {
     return this.listing.selectedItems();
   }
 
@@ -265,63 +250,62 @@ export class FileBrowser extends Widget {
     return this.listing.paste();
   }
 
+  private async _createNew(
+    options: Contents.ICreateOptions
+  ): Promise<Contents.IModel> {
+    // normalize the path if the file is created from a custom drive
+    if (options.path) {
+      const localPath = this._manager.services.contents.localPath(options.path);
+      options.path = this._toDrivePath(this.model.driveName, localPath);
+    }
+    try {
+      const model = await this._manager.newUntitled(options);
+      await this.listing.selectItemByName(model.name, true);
+      await this.rename();
+      return model;
+    } catch (err) {
+      void showErrorMessage(this._trans.__('Error'), err);
+      throw err;
+    }
+  }
+
   /**
    * Create a new directory
    */
-  createNewDirectory(): void {
-    if (this._directoryPending === true) {
-      return;
+  async createNewDirectory(): Promise<Contents.IModel> {
+    if (this._directoryPending) {
+      return this._directoryPending;
     }
-    this._directoryPending = true;
-    // TODO: We should provide a hook into when the
-    // directory is done being created. This probably
-    // means storing a pendingDirectory promise and
-    // returning that if there is already a directory
-    // request.
-    void this._manager
-      .newUntitled({
-        path: this.model.path,
-        type: 'directory'
-      })
-      .then(async model => {
-        await this.listing.selectItemByName(model.name);
-        await this.rename();
-        this._directoryPending = false;
-      })
-      .catch(err => {
-        void showErrorMessage(this._trans.__('Error'), err);
-        this._directoryPending = false;
-      });
+    this._directoryPending = this._createNew({
+      path: this.model.path,
+      type: 'directory'
+    });
+    try {
+      return await this._directoryPending;
+    } finally {
+      this._directoryPending = null;
+    }
   }
 
   /**
    * Create a new file
    */
-  createNewFile(options: FileBrowser.IFileOptions): void {
-    if (this._filePending === true) {
-      return;
+  async createNewFile(
+    options: FileBrowser.IFileOptions
+  ): Promise<Contents.IModel> {
+    if (this._filePending) {
+      return this._filePending;
     }
-    this._filePending = true;
-    // TODO: We should provide a hook into when the
-    // file is done being created. This probably
-    // means storing a pendingFile promise and
-    // returning that if there is already a file
-    // request.
-    void this._manager
-      .newUntitled({
-        path: this.model.path,
-        type: 'file',
-        ext: options.ext
-      })
-      .then(async model => {
-        await this.listing.selectItemByName(model.name);
-        await this.rename();
-        this._filePending = false;
-      })
-      .catch(err => {
-        void showErrorMessage(this._trans.__('Error'), err);
-        this._filePending = false;
-      });
+    this._filePending = this._createNew({
+      path: this.model.path,
+      type: 'file',
+      ext: options.ext
+    });
+    try {
+      return await this._filePending;
+    } finally {
+      this._filePending = null;
+    }
   }
 
   /**
@@ -347,6 +331,15 @@ export class FileBrowser extends Widget {
    */
   download(): Promise<void> {
     return this.listing.download();
+  }
+
+  /**
+   * cd ..
+   *
+   * Go up one level in the directory tree.
+   */
+  async goUp() {
+    return this.listing.goUp();
   }
 
   /**
@@ -416,17 +409,36 @@ export class FileBrowser extends Widget {
     }
   }
 
+  /**
+   * Given a drive name and a local path, return the full
+   * drive path which includes the drive name and the local path.
+   *
+   * @param driveName: the name of the drive
+   * @param localPath: the local path on the drive.
+   *
+   * @returns the full drive path
+   */
+  private _toDrivePath(driveName: string, localPath: string): string {
+    if (driveName === '') {
+      return localPath;
+    } else {
+      return `${driveName}:${PathExt.removeSlash(localPath)}`;
+    }
+  }
+
   protected listing: DirListing;
   protected crumbs: BreadCrumbs;
-  private _trans: TranslationBundle;
-  private _filenameSearcher: ReactWidget;
+  protected mainPanel: Panel;
+
   private _manager: IDocumentManager;
-  private _directoryPending: boolean;
-  private _filePending: boolean;
+  private _directoryPending: Promise<Contents.IModel> | null = null;
+  private _filePending: Promise<Contents.IModel> | null = null;
   private _navigateToCurrentDirectory: boolean;
   private _showLastModifiedColumn: boolean = true;
-  private _useFuzzyFilter: boolean = true;
+  private _showFileSizeColumn: boolean = false;
   private _showHiddenFiles: boolean = false;
+  private _showFileCheckboxes: boolean = false;
+  private _sortNotebooksFirst: boolean = false;
 }
 
 /**

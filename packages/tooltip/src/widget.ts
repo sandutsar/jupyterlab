@@ -1,7 +1,7 @@
 // Copyright (c) Jupyter Development Team.
 // Distributed under the terms of the Modified BSD License.
 
-import { HoverBox } from '@jupyterlab/apputils';
+import { HoverBox } from '@jupyterlab/ui-components';
 import { CodeEditor } from '@jupyterlab/codeeditor';
 import {
   IRenderMime,
@@ -219,19 +219,32 @@ export class Tooltip extends Widget {
 
     const editor = this._editor;
 
-    const anchor = editor.getCoordinateForPosition(position) as ClientRect;
+    const anchor = editor.getCoordinateForPosition(position);
+
+    if (!anchor) {
+      return;
+    }
+
     const style = window.getComputedStyle(this.node);
     const paddingLeft = parseInt(style.paddingLeft!, 10) || 0;
+
+    const host =
+      (editor.host.closest('.jp-MainAreaWidget > .lm-Widget') as HTMLElement) ||
+      editor.host;
 
     // Calculate the geometry of the tooltip.
     HoverBox.setGeometry({
       anchor,
-      host: editor.host,
+      host,
       maxHeight: MAX_HEIGHT,
       minHeight: MIN_HEIGHT,
       node: this.node,
       offset: { horizontal: -1 * paddingLeft },
       privilege: 'below',
+      outOfViewDisplay: {
+        top: 'stick-inside',
+        bottom: 'stick-inside'
+      },
       style: style
     });
   }

@@ -11,8 +11,7 @@ import {
   Toolbar,
   ToolbarButton
 } from '@jupyterlab/ui-components';
-import { framePromise, JupyterServer } from '@jupyterlab/testutils';
-import { toArray } from '@lumino/algorithm';
+import { framePromise, JupyterServer } from '@jupyterlab/testing';
 import { CommandRegistry } from '@lumino/commands';
 import { ReadonlyPartialJSONObject } from '@lumino/coreutils';
 import { PanelLayout, Widget } from '@lumino/widgets';
@@ -22,7 +21,7 @@ const server = new JupyterServer();
 
 beforeAll(async () => {
   await server.start();
-});
+}, 30000);
 
 afterAll(async () => {
   await server.shutdown();
@@ -52,7 +51,7 @@ describe('@jupyterlab/ui-components', () => {
 
       expect(button.hasClass('jp-CommandToolbarButton')).toBe(true);
       simulate(button.node.firstElementChild!, 'mousedown');
-      expect(options.execute).toBeCalledTimes(1);
+      expect(options.execute).toHaveBeenCalledTimes(1);
     });
 
     it('should render the label command', async () => {
@@ -125,9 +124,8 @@ describe('@jupyterlab/ui-components', () => {
     let widget: Toolbar<Widget>;
 
     beforeEach(async () => {
-      jest.setTimeout(20000);
       widget = new Toolbar();
-    });
+    }, 30000);
 
     afterEach(async () => {
       widget.dispose();
@@ -150,7 +148,7 @@ describe('@jupyterlab/ui-components', () => {
         widget.addItem('foo', new Widget());
         widget.addItem('bar', new Widget());
         widget.addItem('baz', new Widget());
-        expect(toArray(widget.names())).toEqual(['foo', 'bar', 'baz']);
+        expect(Array.from(widget.names())).toEqual(['foo', 'bar', 'baz']);
       });
     });
 
@@ -158,7 +156,7 @@ describe('@jupyterlab/ui-components', () => {
       it('should add an item to the toolbar', () => {
         const item = new Widget();
         expect(widget.addItem('test', item)).toBe(true);
-        expect(toArray(widget.names())).toContain('test');
+        expect(Array.from(widget.names())).toContain('test');
       });
 
       it('should add the `jp-Toolbar-item` class to the widget', () => {
@@ -178,14 +176,14 @@ describe('@jupyterlab/ui-components', () => {
         widget.addItem('a', new Widget());
         widget.addItem('b', new Widget());
         widget.insertItem(1, 'c', new Widget());
-        expect(toArray(widget.names())).toEqual(['a', 'c', 'b']);
+        expect(Array.from(widget.names())).toEqual(['a', 'c', 'b']);
       });
 
       it('should clamp the bounds', () => {
         widget.addItem('a', new Widget());
         widget.addItem('b', new Widget());
         widget.insertItem(10, 'c', new Widget());
-        expect(toArray(widget.names())).toEqual(['a', 'b', 'c']);
+        expect(Array.from(widget.names())).toEqual(['a', 'b', 'c']);
       });
     });
 
@@ -195,7 +193,7 @@ describe('@jupyterlab/ui-components', () => {
         widget.addItem('b', new Widget());
         widget.insertItem(1, 'c', new Widget());
         widget.insertAfter('c', 'd', new Widget());
-        expect(toArray(widget.names())).toEqual(['a', 'c', 'd', 'b']);
+        expect(Array.from(widget.names())).toEqual(['a', 'c', 'd', 'b']);
       });
 
       it('should return false if the target item does not exist', () => {
@@ -212,7 +210,7 @@ describe('@jupyterlab/ui-components', () => {
         widget.addItem('b', new Widget());
         widget.insertItem(1, 'c', new Widget());
         widget.insertBefore('c', 'd', new Widget());
-        expect(toArray(widget.names())).toEqual(['a', 'd', 'c', 'b']);
+        expect(Array.from(widget.names())).toEqual(['a', 'd', 'c', 'b']);
       });
 
       it('should return false if the target item does not exist', () => {
@@ -296,6 +294,7 @@ describe('@jupyterlab/ui-components', () => {
         const buttonNode = button.node.firstChild as HTMLButtonElement;
         expect(buttonNode.disabled).toBe(true);
         expect(buttonNode.classList.contains('lm-mod-toggled')).toBe(true);
+        expect(buttonNode.getAttribute('aria-pressed')).toBe('true');
         expect(buttonNode.classList.contains('lm-mod-hidden')).toBe(true);
         button.dispose();
       });
@@ -312,12 +311,16 @@ describe('@jupyterlab/ui-components', () => {
         const buttonNode = button.node.firstChild as HTMLButtonElement;
         expect(buttonNode.disabled).toBe(true);
         expect(buttonNode.classList.contains('lm-mod-toggled')).toBe(true);
+        expect(buttonNode.getAttribute('aria-pressed')).toBe('true');
         expect(buttonNode.classList.contains('lm-mod-hidden')).toBe(true);
         enabled = true;
         visible = true;
         commands.notifyCommandChanged(testLogCommandId);
+        await framePromise();
+        await button.renderPromise;
         expect(buttonNode.disabled).toBe(false);
         expect(buttonNode.classList.contains('lm-mod-toggled')).toBe(true);
+        expect(buttonNode.getAttribute('aria-pressed')).toBe('true');
         expect(buttonNode.classList.contains('lm-mod-hidden')).toBe(false);
         enabled = false;
         visible = false;
@@ -443,6 +446,8 @@ describe('@jupyterlab/ui-components', () => {
         });
         Widget.attach(widget, document.body);
         await framePromise();
+        await widget.renderPromise;
+
         const button = widget.node.firstChild as HTMLElement;
         expect(button.classList.contains('foo')).toBe(true);
         expect(button.querySelector('.iconFoo')).toBeDefined();
@@ -476,6 +481,7 @@ describe('@jupyterlab/ui-components', () => {
           });
           Widget.attach(button, document.body);
           await framePromise();
+          await button.renderPromise;
           simulate(button.node.firstChild as HTMLElement, 'mousedown');
           expect(called).toBe(true);
           button.dispose();
@@ -557,6 +563,7 @@ describe('@jupyterlab/ui-components', () => {
         expect(icon[0].getAttribute('data-icon')).toEqual('ui-components:bug');
         widget.pressed = true;
         await framePromise();
+        await widget.renderPromise;
         expect(widget.pressed).toBe(true);
         expect(button.title).toBe('pressed tooltip');
         expect(button.getAttribute('aria-pressed')).toEqual('true');
@@ -615,6 +622,7 @@ describe('@jupyterlab/ui-components', () => {
 
         widget.enabled = false;
         await framePromise();
+        await widget.renderPromise;
         expect(widget.enabled).toBe(false);
         expect(widget.pressed).toBe(false);
         expect(button.getAttribute('aria-disabled')).toEqual('true');
@@ -645,6 +653,7 @@ describe('@jupyterlab/ui-components', () => {
         };
         widget.onClick = mockOnClickUpdated;
         await framePromise();
+        await widget.renderPromise;
         simulate(widget.node.firstChild as HTMLElement, 'mousedown');
         expect(mockCalled).toBe(false);
         expect(mockUpdatedCalled).toBe(true);

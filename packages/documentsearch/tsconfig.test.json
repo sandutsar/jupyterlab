@@ -6,21 +6,6 @@
       "path": "../apputils"
     },
     {
-      "path": "../cells"
-    },
-    {
-      "path": "../codeeditor"
-    },
-    {
-      "path": "../codemirror"
-    },
-    {
-      "path": "../fileeditor"
-    },
-    {
-      "path": "../notebook"
-    },
-    {
       "path": "../translation"
     },
     {
@@ -30,7 +15,7 @@
       "path": "."
     },
     {
-      "path": "../../testutils"
+      "path": "../testing"
     }
   ]
 }

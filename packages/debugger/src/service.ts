@@ -13,7 +13,7 @@ import { IDisposable } from '@lumino/disposable';
 
 import { ISignal, Signal } from '@lumino/signaling';
 
-import { DebugProtocol } from 'vscode-debugprotocol';
+import { DebugProtocol } from '@vscode/debugprotocol';
 
 import { Debugger } from './debugger';
 
@@ -52,6 +52,13 @@ export class DebuggerService implements IDebugger, IDisposable {
   }
 
   /**
+   * Get debugger config.
+   */
+  get config(): IDebugger.IConfig {
+    return this._config;
+  }
+
+  /**
    * Whether the debug service is disposed.
    */
   get isDisposed(): boolean {
@@ -63,6 +70,13 @@ export class DebuggerService implements IDebugger, IDisposable {
    */
   get isStarted(): boolean {
     return this._session?.isStarted ?? false;
+  }
+
+  /**
+   * A signal emitted when the pause on exception filter changes.
+   */
+  get pauseOnExceptionChanged(): Signal<IDebugger, void> {
+    return this._pauseOnExceptionChanged;
   }
 
   /**
@@ -104,6 +118,7 @@ export class DebuggerService implements IDebugger, IDisposable {
       }
       this._eventMessage.emit(event);
     });
+
     this._sessionChanged.emit(session);
   }
 
@@ -313,6 +328,41 @@ export class DebuggerService implements IDebugger, IDisposable {
   }
 
   /**
+   * Request to set a variable in the global scope.
+   *
+   * @param name The name of the variable.
+   */
+  async copyToGlobals(name: string): Promise<void> {
+    if (!this.session) {
+      throw new Error('No active debugger session');
+    }
+    if (!this.model.supportCopyToGlobals) {
+      throw new Error(
+        'The "copyToGlobals" request is not supported by the kernel'
+      );
+    }
+
+    const frames = this.model.callstack.frames;
+    this.session
+      .sendRequest('copyToGlobals', {
+        srcVariableName: name,
+        dstVariableName: name,
+        srcFrameId: frames[0].id
+      })
+      .then(async () => {
+        const scopes = await this._getScopes(frames[0]);
+        const variables = await Promise.all(
+          scopes.map(scope => this._getVariables(scope))
+        );
+        const variableScopes = this._convertScopes(scopes, variables);
+        this._model.variables.scopes = variableScopes;
+      })
+      .catch(reason => {
+        console.error(reason);
+      });
+  }
+
+  /**
    * Requests all the defined variables and display them in the
    * table view.
    */
@@ -330,6 +380,22 @@ export class DebuggerService implements IDebugger, IDisposable {
       }
     ];
     this._model.variables.scopes = variableScopes;
+  }
+
+  async displayModules(): Promise<void> {
+    if (!this.session) {
+      throw new Error('No active debugger session');
+    }
+
+    const modules = await this.session.sendRequest('modules', {});
+    this._model.kernelSources.kernelSources = modules.body.modules.map(
+      module => {
+        return {
+          name: module.name as string,
+          path: module.path as string
+        };
+      }
+    );
   }
 
   /**
@@ -358,6 +424,8 @@ export class DebuggerService implements IDebugger, IDisposable {
     const stoppedThreads = new Set(body.stoppedThreads);
 
     this._model.hasRichVariableRendering = body.richRendering === true;
+    this._model.supportCopyToGlobals = body.copyToGlobals === true;
+
     this._config.setHashParams({
       kernel: this.session?.connection?.kernel?.name ?? '',
       method: body.hashMethod,
@@ -394,6 +462,11 @@ export class DebuggerService implements IDebugger, IDisposable {
       this._clearModel();
       this._clearSignals();
     }
+
+    // Send the currentExceptionFilters to debugger.
+    if (this.session.currentExceptionFilters) {
+      await this.pauseOnExceptions(this.session.currentExceptionFilters);
+    }
   }
 
   /**
@@ -405,6 +478,22 @@ export class DebuggerService implements IDebugger, IDisposable {
       throw new Error('No active debugger session');
     }
     return this.session.start();
+  }
+
+  /**
+   * Makes the current thread pause if possible.
+   */
+  async pause(): Promise<void> {
+    try {
+      if (!this.session) {
+        throw new Error('No active debugger session');
+      }
+      await this.session.sendRequest('pause', {
+        threadId: this._currentThread()
+      });
+    } catch (err) {
+      console.error('Error:', err.message);
+    }
   }
 
   /**
@@ -487,15 +576,78 @@ export class DebuggerService implements IDebugger, IDisposable {
       this._model.breakpoints.restoreBreakpoints(remoteBreakpoints);
     }
 
+    // Removes duplicated breakpoints. It is better to do it here than
+    // in the editor, because the kernel can change the line of a
+    // breakpoint (when you attemp to set a breakpoint on an empty
+    // line for instance).
+    let addedLines = new Set<number>();
     // Set the kernel's breakpoints for this path.
     const reply = await this._setBreakpoints(localBreakpoints, path);
-    const updatedBreakpoints = reply.body.breakpoints.filter(
-      (val, _, arr) => arr.findIndex(el => el.line === val.line) > -1
-    );
+    const updatedBreakpoints = reply.body.breakpoints.filter((val, _, arr) => {
+      const cond1 = arr.findIndex(el => el.line === val.line) > -1;
+      const cond2 = !addedLines.has(val.line!);
+      addedLines.add(val.line!);
+      return cond1 && cond2;
+    });
 
     // Update the local model and finish kernel configuration.
     this._model.breakpoints.setBreakpoints(path, updatedBreakpoints);
     await this.session.sendRequest('configurationDone', {});
+  }
+
+  /**
+   * Determines if pausing on exceptions is supported by the kernel
+   */
+  pauseOnExceptionsIsValid(): boolean {
+    if (this.isStarted) {
+      if (this.session?.exceptionBreakpointFilters?.length !== 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Add or remove a filter from the current used filters.
+   *
+   * @param exceptionFilter - The filter to add or remove from current filters.
+   */
+  async pauseOnExceptionsFilter(exceptionFilter: string): Promise<void> {
+    if (!this.session?.isStarted) {
+      return;
+    }
+    let exceptionFilters = this.session.currentExceptionFilters;
+    if (this.session.isPausingOnException(exceptionFilter)) {
+      const index = exceptionFilters.indexOf(exceptionFilter);
+      exceptionFilters.splice(index, 1);
+    } else {
+      exceptionFilters?.push(exceptionFilter);
+    }
+    await this.pauseOnExceptions(exceptionFilters);
+  }
+
+  /**
+   * Enable or disable pausing on exceptions.
+   *
+   * @param exceptionFilters - The filters to use for the current debugging session.
+   */
+  async pauseOnExceptions(exceptionFilters: string[]): Promise<void> {
+    if (!this.session?.isStarted) {
+      return;
+    }
+    const exceptionBreakpointFilters =
+      this.session.exceptionBreakpointFilters?.map(e => e.filter) || [];
+    let options: DebugProtocol.SetExceptionBreakpointsArguments = {
+      filters: []
+    };
+    exceptionFilters.forEach(filter => {
+      if (exceptionBreakpointFilters.includes(filter)) {
+        options.filters.push(filter);
+      }
+    });
+    this.session.currentExceptionFilters = options.filters;
+    await this.session.sendRequest('setExceptionBreakpoints', options);
+    this._pauseOnExceptionChanged.emit();
   }
 
   /**
@@ -514,7 +666,7 @@ export class DebuggerService implements IDebugger, IDisposable {
           path: this._session?.connection?.path ?? '',
           source: id
         });
-        const tmpCells = editorList.map(e => e.model.value.text);
+        const tmpCells = editorList.map(e => e.src.getSource());
         cells = cells.concat(tmpCells);
       }
     }
@@ -839,7 +991,6 @@ export class DebuggerService implements IDebugger, IDisposable {
     breakpoints: Map<string, IDebugger.IBreakpoint[]>
   ): Promise<void> {
     for (const [source, points] of breakpoints) {
-      console.log(source);
       await this._setBreakpoints(
         points
           .filter(({ line }) => typeof line === 'number')
@@ -861,6 +1012,7 @@ export class DebuggerService implements IDebugger, IDisposable {
   );
   private _specsManager: KernelSpec.IManager | null;
   private _trans: TranslationBundle;
+  private _pauseOnExceptionChanged = new Signal<IDebugger, void>(this);
 }
 
 /**

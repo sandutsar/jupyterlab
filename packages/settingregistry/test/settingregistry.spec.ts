@@ -8,8 +8,9 @@ import {
   Settings
 } from '@jupyterlab/settingregistry';
 import { StateDB } from '@jupyterlab/statedb';
-import { signalToPromise } from '@jupyterlab/testutils';
+import { signalToPromise } from '@jupyterlab/testing';
 import { JSONObject } from '@lumino/coreutils';
+import * as json5 from 'json5';
 
 class TestConnector extends StateDB {
   schemas: { [key: string]: ISettingRegistry.ISchema } = {};
@@ -833,6 +834,58 @@ describe('@jupyterlab/settingregistry', () => {
       });
     });
 
+    describe('#annotatedDefaults()', () => {
+      it('should represent arrays correctly', () => {
+        const id = 'alpha';
+        const data = { composite: {}, user: {} };
+        const schema: ISettingRegistry.ISchema = {
+          type: 'object',
+          properties: {
+            optionalArray: { type: 'array' },
+            requiredArray: { type: 'array' },
+            arrayWithDefault: { type: 'array', default: [1, 2] },
+            arrayWithObjects: {
+              type: 'array',
+              default: [{ foo: 'a' }],
+              items: { $ref: '#/definitions/item' }
+            }
+          },
+          required: ['requiredArray'],
+          definitions: {
+            item: {
+              type: 'object',
+              properties: {
+                foo: {
+                  type: 'string'
+                },
+                bar: {
+                  type: 'number',
+                  default: 0
+                },
+                baz: {
+                  type: 'string',
+                  default: 'zip'
+                }
+              }
+            }
+          }
+        };
+        const raw = '{ }';
+        const version = 'test';
+        const plugin = { id, data, raw, schema, version };
+
+        settings = new Settings({ plugin, registry });
+        const annotatedDefaults = settings.annotatedDefaults();
+        const defaults = json5.parse(annotatedDefaults);
+        expect(defaults.optionalArray).toBe(undefined);
+        expect(defaults.requiredArray).toEqual([]);
+        expect(defaults.arrayWithDefault).toEqual([1, 2]);
+        expect(defaults.arrayWithObjects).toEqual([
+          { foo: 'a', bar: 0, baz: 'zip' }
+        ]);
+      });
+    });
+
     describe('#dispose()', () => {
       it('should dispose the settings object', () => {
         const id = 'alpha';
@@ -902,6 +955,44 @@ describe('@jupyterlab/settingregistry', () => {
         expect(settings.default('bar')).toBe(defaults.bar);
         expect(settings.default('baz')).toEqual(defaults.baz);
         expect(settings.default('nonexistent-default')).toBeUndefined();
+      });
+
+      it('should use definition at top of the schema', async () => {
+        const id = 'omicron';
+        const defaults = {
+          foo: [
+            { bar: 2, baz: 'zip' },
+            { bar: 0, baz: 'zip' }
+          ]
+        };
+
+        connector.schemas[id] = {
+          type: 'object',
+          properties: {
+            foo: {
+              type: 'array',
+              items: { $ref: '#/definitions/fooItem' },
+              default: [{ bar: 2 }, {}]
+            }
+          },
+          definitions: {
+            fooItem: {
+              type: 'object',
+              properties: {
+                bar: {
+                  type: 'number',
+                  default: 0
+                },
+                baz: {
+                  type: 'string',
+                  default: 'zip'
+                }
+              }
+            }
+          }
+        };
+        settings = (await registry.load(id)) as Settings;
+        expect(settings.default()).toStrictEqual(defaults);
       });
     });
 

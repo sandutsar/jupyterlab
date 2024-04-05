@@ -11,6 +11,8 @@ import { CallstackModel } from './panels/callstack/model';
 
 import { SourcesModel } from './panels/sources/model';
 
+import { KernelSourcesModel } from './panels/kernelSources/model';
+
 import { VariablesModel } from './panels/variables/model';
 
 /**
@@ -27,6 +29,7 @@ export class DebuggerModel implements IDebugger.Model.IService {
     this.sources = new SourcesModel({
       currentFrameChanged: this.callstack.currentFrameChanged
     });
+    this.kernelSources = new KernelSourcesModel();
   }
 
   /**
@@ -50,6 +53,11 @@ export class DebuggerModel implements IDebugger.Model.IService {
   readonly sources: SourcesModel;
 
   /**
+   * The sources model.
+   */
+  readonly kernelSources: KernelSourcesModel;
+
+  /**
    * A signal emitted when the debugger widget is disposed.
    */
   get disposed(): ISignal<this, void> {
@@ -64,6 +72,16 @@ export class DebuggerModel implements IDebugger.Model.IService {
   }
   set hasRichVariableRendering(v: boolean) {
     this._hasRichVariableRendering = v;
+  }
+
+  /**
+   * Whether the kernel supports the copyToGlobals request.
+   */
+  get supportCopyToGlobals(): boolean {
+    return this._supportCopyToGlobals;
+  }
+  set supportCopyToGlobals(v: boolean) {
+    this._supportCopyToGlobals = v;
   }
 
   /**
@@ -120,6 +138,7 @@ export class DebuggerModel implements IDebugger.Model.IService {
       return;
     }
     this._isDisposed = true;
+    this.kernelSources.dispose();
     this._disposed.emit();
   }
 
@@ -133,12 +152,14 @@ export class DebuggerModel implements IDebugger.Model.IService {
     this.callstack.frames = [];
     this.variables.scopes = [];
     this.sources.currentSource = null;
+    this.kernelSources.kernelSources = null;
     this.title = '-';
   }
 
   private _disposed = new Signal<this, void>(this);
   private _isDisposed = false;
   private _hasRichVariableRendering = false;
+  private _supportCopyToGlobals = false;
   private _stoppedThreads = new Set<number>();
   private _title = '-';
   private _titleChanged = new Signal<this, string>(this);

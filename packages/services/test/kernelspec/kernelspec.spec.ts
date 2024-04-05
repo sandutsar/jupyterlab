@@ -1,7 +1,7 @@
 // Copyright (c) Jupyter Development Team.
 // Distributed under the terms of the Modified BSD License.
 
-import { JupyterServer } from '@jupyterlab/testutils';
+import { JupyterServer } from '@jupyterlab/testing';
 import { KernelSpecAPI } from '../../src';
 import { getRequestHandler, makeSettings, PYTHON_SPEC } from '../utils';
 
@@ -13,7 +13,7 @@ const server = new JupyterServer();
 
 beforeAll(async () => {
   await server.start();
-});
+}, 30000);
 
 afterAll(async () => {
   await server.shutdown();
@@ -121,7 +121,7 @@ describe('kernel', () => {
     it('should throw an error for an invalid response', async () => {
       const serverSettings = getRequestHandler(201, {});
       const promise = KernelSpecAPI.getSpecs(serverSettings);
-      await expect(promise).rejects.toThrow(/Invalid response: 201 Created/);
+      await expect(promise).rejects.toThrow(/Invalid response: 201/);
     });
 
     it('should handle metadata', async () => {

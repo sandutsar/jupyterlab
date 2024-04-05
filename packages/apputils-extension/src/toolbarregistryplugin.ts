@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) Jupyter Development Team.
+ * Distributed under the terms of the Modified BSD License.
+ */
+
 import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin
@@ -12,7 +17,8 @@ import {
  * The default toolbar registry.
  */
 export const toolbarRegistry: JupyterFrontEndPlugin<IToolbarWidgetRegistry> = {
-  id: '@jupyter/apputils-extension:toolbar-registry',
+  id: '@jupyterlab/apputils-extension:toolbar-registry',
+  description: 'Provides toolbar items registry.',
   autoStart: true,
   provides: IToolbarWidgetRegistry,
   activate: (app: JupyterFrontEnd) => {

@@ -6,16 +6,19 @@ import { Message, MessageLoop } from '@lumino/messaging';
 import { ISignal, Signal } from '@lumino/signaling';
 import { Widget } from '@lumino/widgets';
 import * as React from 'react';
-import * as ReactDOM from 'react-dom';
+import { createRoot, Root } from 'react-dom/client';
 
 type ReactRenderElement =
   | Array<React.ReactElement<any>>
   | React.ReactElement<any>;
 
 /**
- * An abstract class for a Phosphor widget which renders a React component.
+ * An abstract class for a Lumino widget which renders a React component.
  */
 export abstract class ReactWidget extends Widget {
+  constructor() {
+    super();
+  }
   /**
    * Creates a new `ReactWidget` that renders a constant element.
    * @param element React element to render.
@@ -61,7 +64,10 @@ export abstract class ReactWidget extends Widget {
    */
   protected onBeforeDetach(msg: Message): void {
     // Unmount the component so it can tear down.
-    ReactDOM.unmountComponentAtNode(this.node);
+    if (this._rootDOM !== null) {
+      this._rootDOM.unmount();
+      this._rootDOM = null;
+    }
   }
 
   /**
@@ -72,18 +78,33 @@ export abstract class ReactWidget extends Widget {
   private renderDOM(): Promise<void> {
     return new Promise<void>(resolve => {
       const vnode = this.render();
+      if (this._rootDOM === null) {
+        this._rootDOM = createRoot(this.node);
+      }
       // Split up the array/element cases so type inference chooses the right
       // signature.
       if (Array.isArray(vnode)) {
-        ReactDOM.render(vnode, this.node, resolve);
+        this._rootDOM.render(vnode);
+        // Resolves after the widget has been rendered.
+        // https://github.com/reactwg/react-18/discussions/5#discussioncomment-798304
+        requestIdleCallback(() => resolve());
       } else if (vnode) {
-        ReactDOM.render(vnode, this.node, resolve);
+        this._rootDOM.render(vnode);
+        // Resolves after the widget has been rendered.
+        // https://github.com/reactwg/react-18/discussions/5#discussioncomment-798304
+        requestIdleCallback(() => resolve());
+      } else {
+        // If the virtual node is null, unmount the node content
+        this._rootDOM.unmount();
+        this._rootDOM = null;
+        requestIdleCallback(() => resolve());
       }
     });
   }
 
   // Set whenever a new render is triggered and resolved when it is finished.
   renderPromise?: Promise<void>;
+  private _rootDOM: Root | null = null;
 }
 
 /**
@@ -95,9 +116,9 @@ export abstract class VDomRenderer<
   /**
    * Create a new VDomRenderer
    */
-  constructor(model: T extends null ? void : T) {
+  constructor(model?: T) {
     super();
-    this.model = ((model ?? null) as unknown) as T;
+    this.model = (model ?? null) as unknown as T;
   }
   /**
    * A signal emitted when the model changes.
@@ -192,7 +213,7 @@ export interface IUseSignalState<SENDER, ARGS> {
 }
 
 /**
- * UseSignal provides a way to hook up a Phosphor signal to a React element,
+ * UseSignal provides a way to hook up a Lumino signal to a React element,
  * so that the element is re-rendered every time the signal fires.
  *
  * It is implemented through the "render props" technique, using the `children`
@@ -206,7 +227,7 @@ export interface IUseSignalState<SENDER, ARGS> {
  * ```
  * function LiveButton(isActiveSignal: ISignal<any, boolean>) {
  *  return (
- *    <UseSignal signal={isActiveSignal} initialArgs={True}>
+ *    <UseSignal signal={isActiveSignal} initialArgs={true}>
  *     {(_, isActive) => <Button isActive={isActive}>}
  *    </UseSignal>
  *  )
@@ -220,7 +241,7 @@ export interface IUseSignalState<SENDER, ARGS> {
  *  return (
  *    <UseSignal
  *      signal={isActiveSignal}
- *      initialArgs={True}
+ *      initialArgs={true}
  *      children={(_, isActive) => <Button isActive={isActive}>}
  *    />
  *  )

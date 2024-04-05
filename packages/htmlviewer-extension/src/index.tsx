@@ -25,9 +25,12 @@ import {
   IHTMLViewerTracker,
   ToolbarItems
 } from '@jupyterlab/htmlviewer';
+import { IObservableList } from '@jupyterlab/observables';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
 import { html5Icon } from '@jupyterlab/ui-components';
+
+const HTML_VIEWER_PLUGIN_ID = '@jupyterlab/htmlviewer-extension:plugin';
 
 /**
  * Factory name
@@ -46,7 +49,8 @@ namespace CommandIDs {
  */
 const htmlPlugin: JupyterFrontEndPlugin<IHTMLViewerTracker> = {
   activate: activateHTMLViewer,
-  id: '@jupyterlab/htmlviewer-extension:plugin',
+  id: HTML_VIEWER_PLUGIN_ID,
+  description: 'Adds HTML file viewer and provides its tracker.',
   provides: IHTMLViewerTracker,
   requires: [ITranslator],
   optional: [
@@ -70,15 +74,15 @@ function activateHTMLViewer(
   toolbarRegistry: IToolbarWidgetRegistry | null
 ): IHTMLViewerTracker {
   let toolbarFactory:
-    | ((widget: HTMLViewer) => DocumentRegistry.IToolbarItem[])
+    | ((widget: HTMLViewer) => IObservableList<DocumentRegistry.IToolbarItem>)
     | undefined;
   const trans = translator.load('jupyterlab');
 
   if (toolbarRegistry) {
-    toolbarRegistry.registerFactory<HTMLViewer>(FACTORY, 'refresh', widget =>
+    toolbarRegistry.addFactory<HTMLViewer>(FACTORY, 'refresh', widget =>
       ToolbarItems.createRefreshButton(widget, translator)
     );
-    toolbarRegistry.registerFactory<HTMLViewer>(FACTORY, 'trust', widget =>
+    toolbarRegistry.addFactory<HTMLViewer>(FACTORY, 'trust', widget =>
       ToolbarItems.createTrustButton(widget, translator)
     );
 
@@ -130,6 +134,26 @@ function activateHTMLViewer(
     });
   }
 
+  let trustByDefault = false;
+
+  if (settingRegistry) {
+    const loadSettings = settingRegistry.load(HTML_VIEWER_PLUGIN_ID);
+    const updateSettings = (settings: ISettingRegistry.ISettings): void => {
+      trustByDefault = settings.get('trustByDefault').composite as boolean;
+    };
+
+    Promise.all([loadSettings, app.restored])
+      .then(([settings]) => {
+        updateSettings(settings);
+        settings.changed.connect(settings => {
+          updateSettings(settings);
+        });
+      })
+      .catch((reason: Error) => {
+        console.error(reason.message);
+      });
+  }
+
   app.docRegistry.addWidgetFactory(factory);
   factory.widgetCreated.connect((sender, widget) => {
     // Track the widget.
@@ -143,6 +167,8 @@ function activateHTMLViewer(
     widget.trustedChanged.connect(() => {
       app.commands.notifyCommandChanged(CommandIDs.trustHTML);
     });
+
+    widget.trusted = trustByDefault;
 
     widget.title.icon = ft.icon!;
     widget.title.iconClass = ft.iconClass ?? '';
@@ -174,6 +200,11 @@ function activateHTMLViewer(
       current.trusted = !current.trusted;
     }
   });
+
+  tracker.currentChanged.connect(() => {
+    app.commands.notifyCommandChanged(CommandIDs.trustHTML);
+  });
+
   if (palette) {
     palette.addItem({
       command: CommandIDs.trustHTML,
